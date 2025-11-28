@@ -14,6 +14,7 @@ import shutil
 from typing import Dict, Any
 import logging
 import json
+import time
 
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -100,6 +101,31 @@ async def classify_video_effect(file: UploadFile = File(...)) -> Dict[str, Any]:
             # Upload video to Gemini
             logger.info("Uploading video to Gemini...")
             video_file = genai.upload_file(video_path)
+
+            # Wait for file to be processed and become ACTIVE
+            logger.info("Waiting for video to be processed...")
+            max_wait_time = 120  # Maximum wait time in seconds
+            wait_interval = 2   # Check every 2 seconds
+            elapsed_time = 0
+            
+            while video_file.state.name == "PROCESSING":
+                if elapsed_time >= max_wait_time:
+                    raise HTTPException(
+                        status_code=408,
+                        detail="Video processing timed out. Please try a shorter video."
+                    )
+                time.sleep(wait_interval)
+                elapsed_time += wait_interval
+                video_file = genai.get_file(video_file.name)
+                logger.info(f"File state: {video_file.state.name} (waited {elapsed_time}s)")
+
+            if video_file.state.name == "FAILED":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Video processing failed. Please try a different video format."
+                )
+            
+            logger.info(f"Video ready! State: {video_file.state.name}")
 
             # Create classification prompt
             prompt = """
