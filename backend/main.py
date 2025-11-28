@@ -129,9 +129,11 @@ async def classify_video_effect(file: UploadFile = File(...)) -> Dict[str, Any]:
 
             # Create classification prompt
             prompt = """
-            Analyze this video clip and identify the primary video editing effect/transition used.
+            Analyze this video clip and identify:
+            1. The primary video editing effect/transition used
+            2. Any text/caption effects present in the video
 
-            Effect categories (choose the best match):
+            TRANSITION EFFECT categories (choose the best match):
             - hard_cut: Abrupt change between shots with no transition
             - crossfade: Gradual dissolve/fade from one shot to another
             - whip_pan: Fast camera pan movement with motion blur
@@ -143,8 +145,41 @@ async def classify_video_effect(file: UploadFile = File(...)) -> Dict[str, Any]:
             - match_cut: Visual continuity cut matching objects/shapes
             - unknown: No clear editing effect detected
 
+            TEXT/CAPTION EFFECT categories (can select multiple, or "none" if no text):
+            - typewriter: Text appears letter by letter
+            - pop_up: Text pops/bounces into view
+            - fade_in: Text fades in gradually
+            - slide_in: Text slides in from a direction
+            - kinetic_typography: Animated text with movement/scaling
+            - glitch_text: Text with glitch/distortion effects
+            - neon_glow: Text with glowing/neon effect
+            - 3d_text: Three-dimensional text effect
+            - handwritten: Text appears as if being written
+            - bounce: Text bounces or has elastic animation
+            - shake: Text shakes or vibrates
+            - highlight: Text gets highlighted or underlined
+            - word_by_word: Words appear one at a time
+            - scale_in: Text scales up from small to normal
+            - rotate_in: Text rotates into position
+            - split_text: Text splits or separates
+            - stroke_reveal: Text outline draws itself
+            - color_wipe: Color sweeps across text
+            - none: No text effects detected
+
             Return ONLY a JSON object in this exact format:
-            {"effect": "effect_name", "confidence": 0.85, "description": "brief explanation of why this effect was detected"}
+            {
+              "effect": "effect_name",
+              "confidence": 0.85,
+              "description": "brief explanation of the transition effect",
+              "caption_effects": {
+                "detected": true,
+                "effects": ["effect1", "effect2"],
+                "text_content": "the actual text shown if readable",
+                "description": "description of how the text is animated/styled"
+              }
+            }
+
+            If no text/captions are present, set caption_effects.detected to false and effects to ["none"].
             """
 
             # Run Gemini classification
@@ -180,6 +215,41 @@ async def classify_video_effect(file: UploadFile = File(...)) -> Dict[str, Any]:
 
                 # Ensure confidence is a number between 0 and 1
                 result["confidence"] = max(0.0, min(1.0, float(result["confidence"])))
+
+                # Validate caption_effects if present
+                valid_caption_effects = [
+                    "typewriter", "pop_up", "fade_in", "slide_in", "kinetic_typography",
+                    "glitch_text", "neon_glow", "3d_text", "handwritten", "bounce",
+                    "shake", "highlight", "word_by_word", "scale_in", "rotate_in",
+                    "split_text", "stroke_reveal", "color_wipe", "none"
+                ]
+                
+                if "caption_effects" not in result:
+                    result["caption_effects"] = {
+                        "detected": False,
+                        "effects": ["none"],
+                        "text_content": "",
+                        "description": "No text effects analyzed"
+                    }
+                else:
+                    # Validate caption effects
+                    caption = result["caption_effects"]
+                    if "effects" in caption:
+                        caption["effects"] = [
+                            e for e in caption["effects"] 
+                            if e in valid_caption_effects
+                        ] or ["none"]
+                    else:
+                        caption["effects"] = ["none"]
+                    
+                    if "detected" not in caption:
+                        caption["detected"] = caption["effects"] != ["none"]
+                    
+                    if "text_content" not in caption:
+                        caption["text_content"] = ""
+                    
+                    if "description" not in caption:
+                        caption["description"] = ""
 
                 result["model_used"] = "gemini-latest"  # Could be 2.0-flash-exp or 1.5-pro
 

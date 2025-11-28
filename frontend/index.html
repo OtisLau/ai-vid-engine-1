@@ -96,6 +96,47 @@
             font-size: 12px;
             white-space: pre-wrap;
         }
+        .caption-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e7f3ff;
+            border: 1px solid #b3d7ff;
+            border-radius: 8px;
+        }
+        .caption-section h4 {
+            margin: 0 0 10px 0;
+            color: #0056b3;
+        }
+        .effect-tag {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin: 3px;
+        }
+        .effect-tag.none {
+            background: #6c757d;
+        }
+        .text-content {
+            background: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-style: italic;
+            border-left: 3px solid #007bff;
+        }
+        .result-section {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #c3e6cb;
+        }
+        .result-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
     </style>
 </head>
 <body>
@@ -111,7 +152,7 @@
                 Choose Video File
             </button>
             <p style="color: #666; font-size: 14px; margin-top: 15px;">
-                Uses Gemini AI to detect editing effects like crossfades, whip pans, hard cuts, etc.
+                Uses Gemini AI to detect editing effects and text/caption animations
             </p>
         </div>
 
@@ -199,15 +240,40 @@
         function displayResults(result) {
             const confidencePercent = Math.round(result.confidence * 100);
 
+            // Build caption effects HTML
+            let captionHtml = '';
+            if (result.caption_effects) {
+                const caption = result.caption_effects;
+                const hasCaption = caption.detected && caption.effects && !caption.effects.includes('none');
+                
+                captionHtml = `
+                    <div class="caption-section">
+                        <h4>📝 Text/Caption Effects</h4>
+                        ${hasCaption ? `
+                            <div>
+                                ${caption.effects.map(e => `<span class="effect-tag">${e.replace('_', ' ')}</span>`).join('')}
+                            </div>
+                            ${caption.text_content ? `<div class="text-content">"${caption.text_content}"</div>` : ''}
+                            ${caption.description ? `<p style="margin-top: 10px;"><strong>Animation:</strong> ${caption.description}</p>` : ''}
+                        ` : `
+                            <span class="effect-tag none">No text effects detected</span>
+                        `}
+                    </div>
+                `;
+            }
+
             let html = `
                 <div class="success">
-                    <h3>🎯 Detected Effect: <strong>${result.effect.replace('_', ' ').toUpperCase()}</strong></h3>
-                    <p><strong>Confidence:</strong> ${confidencePercent}%</p>
-                    <div class="confidence-bar">
-                        <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
+                    <div class="result-section">
+                        <h3>🎯 Transition Effect: <strong>${result.effect.replace('_', ' ').toUpperCase()}</strong></h3>
+                        <p><strong>Confidence:</strong> ${confidencePercent}%</p>
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
+                        </div>
+                        <p><strong>Description:</strong> ${result.description}</p>
                     </div>
-                    <p><strong>Description:</strong> ${result.description}</p>
-                    <p><strong>Model Used:</strong> ${result.model_used}</p>
+                    ${captionHtml}
+                    <p style="margin-top: 15px; font-size: 12px; color: #666;"><strong>Model:</strong> ${result.model_used}</p>
                 </div>
             `;
 
