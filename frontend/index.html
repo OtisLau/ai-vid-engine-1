@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Video Effect Detector</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+        }
+        .upload-area:hover {
+            border-color: #0056b3;
+            background: #f8f9fa;
+        }
+        .upload-area.dragover {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        #file-input {
+            display: none;
+        }
+        .upload-btn {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .upload-btn:hover {
+            background: #0056b3;
+        }
+        #results {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+        }
+        .confidence-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            transition: width 0.5s ease;
+        }
+        .debug-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 AI Video Effect Detector</h1>
+
+        <div class="upload-area" id="upload-area">
+            <h3>Upload a Video (5-10 seconds)</h3>
+            <p>Supported formats: MP4, MOV, AVI</p>
+            <input type="file" id="file-input" accept="video/*">
+            <br><br>
+            <button class="upload-btn" onclick="document.getElementById('file-input').click()">
+                Choose Video File
+            </button>
+            <p style="color: #666; font-size: 14px; margin-top: 15px;">
+                Uses Gemini AI to detect editing effects like crossfades, whip pans, hard cuts, etc.
+            </p>
+        </div>
+
+        <div id="results"></div>
+
+        <div class="debug-section" id="debug-section" style="display: none;">
+            <strong>Raw API Response:</strong>
+            <div id="debug-content"></div>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const resultsDiv = document.getElementById('results');
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            // Validate file type
+            const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+            if (!allowedTypes.includes(file.type)) {
+                showResult('error', 'Please select a valid video file (MP4, MOV, or AVI)');
+                return;
+            }
+
+            // Validate file size (50MB limit)
+            if (file.size > 50 * 1024 * 1024) {
+                showResult('error', 'File too large. Please select a video under 50MB');
+                return;
+            }
+
+            uploadVideo(file);
+        }
+
+        async function uploadVideo(file) {
+            showResult('loading', 'Analyzing video with Gemini AI...');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/classify', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    displayResults(result);
+                } else {
+                    showResult('error', result.detail || 'Analysis failed');
+                }
+            } catch (error) {
+                showResult('error', `Network error: ${error.message}`);
+            }
+        }
+
+        function displayResults(result) {
+            const confidencePercent = Math.round(result.confidence * 100);
+
+            let html = `
+                <div class="success">
+                    <h3>🎯 Detected Effect: <strong>${result.effect.replace('_', ' ').toUpperCase()}</strong></h3>
+                    <p><strong>Confidence:</strong> ${confidencePercent}%</p>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
+                    </div>
+                    <p><strong>Description:</strong> ${result.description}</p>
+                    <p><strong>Model Used:</strong> ${result.model_used}</p>
+                </div>
+            `;
+
+            resultsDiv.innerHTML = html;
+            resultsDiv.style.display = 'block';
+
+            // Show debug info
+            document.getElementById('debug-section').style.display = 'block';
+            document.getElementById('debug-content').textContent = JSON.stringify(result, null, 2);
+        }
+
+        function showResult(type, message) {
+            let className, icon;
+            if (type === 'success') {
+                className = 'success';
+                icon = '✅';
+            } else if (type === 'error') {
+                className = 'error';
+                icon = '❌';
+            } else if (type === 'loading') {
+                className = 'loading';
+                icon = '⏳';
+            }
+
+            resultsDiv.innerHTML = `<div class="${className}">${icon} ${message}</div>`;
+            resultsDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
